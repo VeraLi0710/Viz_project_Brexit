@@ -1,0 +1,130 @@
+<!DOCTYPE html>  
+<html>  
+<head>  
+    <meta charset="utf-8" />  
+    <title>Mapbox 3D School Data</title>  
+    <meta name="viewport" content="width=device-width, initial-scale=1">  
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>  
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />  
+    <style>  
+        body, html { margin: 0; padding: 0; height: 100%; }  
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }  
+        #slider-container {  
+            position: absolute;  
+            bottom: 50px;  
+            left: 50px;  
+            background: white;  
+            padding: 10px;  
+            border-radius: 5px;  
+            z-index: 100;  
+        }  
+    </style>  
+</head>  
+<body>  
+    <div id="map"></div>  
+    <div id="slider-container">  
+        <input id="year-slider" type="range" min="2020" max="2021" step="1" value="2020">  
+        <label for="year-slider">Year: <span id="year-label">2020</span></label>  
+    </div>  
+    <script>  
+        // 替换为你的 Mapbox Access Token  
+        mapboxgl.accessToken = 'pk.eyJ1IjoieWl4aW5nLWxpIiwiYSI6ImNtN3FtNWh6YjA0ancybnM4aGxjZnlheTEifQ.sKwaoIMQR65VQmYDbnu2MQ';  
+
+        // 初始化地图  
+        const map = new mapboxgl.Map({  
+            container: 'map',  
+            style: 'mapbox://styles/yixing-li/cm7qq3q0q00le01sb6zwp03g9', // 使用你的样式  
+            center: [-3.7038, 40.4168], // 地图中心点  
+            zoom: 4,  
+            pitch: 45, // 倾斜视角  
+            bearing: 0  
+        });  
+
+        // 当地图加载完成时，添加数据和图层  
+        map.on('load', () => {  
+            // 添加灯光效果  
+            map.setLight({  
+                intensity: 0.5,  
+                color: 'white',  
+                position: [1.5, 90, 80]  
+            });  
+
+            // 初始化年份数据  
+            let currentYear = 2020;  
+
+            // 加载初始数据（2020 年）  
+            updateData(currentYear);  
+
+            // 绑定滑块事件  
+            const slider = document.getElementById('year-slider');  
+            const yearLabel = document.getElementById('year-label');  
+            slider.addEventListener('input', (e) => {  
+                currentYear = parseInt(e.target.value);  
+                yearLabel.textContent = currentYear;  
+                updateData(currentYear); // 更新数据  
+            });  
+        });  
+
+        // 更新数据函数  
+        function updateData(year) {  
+            const dataUrl = year === 2020  
+                ? 'path/to/geojson-outputs-schools-2020.geojson' // 替换为 2020 年数据路径  
+                : 'path/to/geojson-outputs-schools-2021.geojson'; // 替换为 2021 年数据路径  
+
+            // 加载 GeoJSON 数据  
+            fetch(dataUrl)  
+                .then((response) => response.json())  
+                .then((geojsonData) => {  
+                    // 筛选数据，按国家计算总学生数  
+                    const countryTotals = {};  
+                    geojsonData.features.forEach((feature) => {  
+                        const country = feature.properties.country;  
+                        const students = feature.properties.students || 0;  
+                        countryTotals[country] = (countryTotals[country] || 0) + students;  
+                    });  
+
+                    // 转换为柱状图的 GeoJSON 数据  
+                    const extrusionData = {  
+                        type: 'FeatureCollection',  
+                        features: Object.keys(countryTotals).map((country) => {  
+                            const center = getCountryCenter(country); // 获取国家中心点  
+                            return {  
+                                type: 'Feature',  
+                                geometry: { type: 'Point', coordinates: center },  
+                                properties: { students: countryTotals[country] }  
+                            };  
+                        })  
+                    };  
+
+                    // 更新 3D 柱状图层  
+                    if (map.getSource('schools-extrusion')) {  
+                        map.getSource('schools-extrusion').setData(extrusionData);  
+                    } else {  
+                        map.addSource('schools-extrusion', { type: 'geojson', data: extrusionData });  
+                        map.addLayer({  
+                            id: 'schools-extrusion-layer',  
+                            type: 'fill-extrusion',  
+                            source: 'schools-extrusion',  
+                            paint: {  
+                                'fill-extrusion-height': ['*', ['get', 'students'], 10],  
+                                'fill-extrusion-base': 0,  
+                                'fill-extrusion-color': '#ff8c00',  
+                                'fill-extrusion-opacity': 0.8  
+                            }  
+                        });  
+                    }  
+                });  
+        }  
+
+        // 获取国家中心点的函数（需要你提供国家中心点数据）  
+        function getCountryCenter(country) {  
+            const countryCenters = {  
+                'UK': [-0.1276, 51.5074],  
+                'Spain': [-3.7038, 40.4168],  
+                // 添加其他国家中心点  
+            };  
+            return countryCenters[country] || [0, 0]; // 默认返回 [0, 0]  
+        }  
+    </script>  
+</body>  
+</html>
